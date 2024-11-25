@@ -274,6 +274,12 @@ class TempleOfHorror():
 
             card = np.random.choice(self.player_hands[f"agent_{agent_number}"])
             self.player_hands[f"agent_{agent_number}"].remove(card)
+            if "gold" in card:
+                self.enc_player_hands[f"agent_{agent_number}"].remove(3)
+            elif "fire" in card:
+                self.enc_player_hands[f"agent_{agent_number}"].remove(2)
+            else:
+                self.enc_player_hands[f"agent_{agent_number}"].remove(1)
             #print(card)
             # Erase card from Deck
             self.deck_cards.remove(card)
