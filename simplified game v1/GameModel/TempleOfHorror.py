@@ -237,10 +237,7 @@ class TempleOfHorror():
         # Random Message Creation 
         self.message_space = []
         #self.random_message( .01)
-        agents = [0,1,2]
-        random.shuffle(agents)
 
-        self.random_order = agents
 
 
 

@@ -3,7 +3,7 @@ import random
 import copy
 from tqdm import tqdm
 import config
-
+import random
 
 np.random.seed(42)
 random.seed(42)
@@ -74,23 +74,35 @@ class TempleCFR():
 		self.nodes = dict()
 		self.env = TempleOfHorror(3)
 		self.env_aux = copy.deepcopy(self.env)
-		self.acting_player = random.randint(0,self.env.N-1)
-
+		self.acting_player = None
+		self.agents_order = [0,1,2]
 
 	def cfr_iterations_external(self):
 		utilities = list()
 		utility = np.zeros(self.env.N)
 		for t in tqdm(range(1, self.iterations + 1)):
 			observation = self.env.reset() 
-			self.acting_player = self.env.random_order[0]
+			random.shuffle(self.agents_order)
+			self.random_order = self.agents_order
+			self.acting_player = self.random_order[0]
+			print(self.acting_player)
 
 			for learning_player in range(0,3): # Players
 				#print("Player plays:", player)
 				probability_players = {agent:1.0 for agent in self.env.agents} 
 				self.env_aux = copy.deepcopy(self.env)
 				infoSet = self.env.create_state(learning_player, observation)
+				hand = f"{self.env_aux.enc_player_hands[f'agent_{learning_player}']}"
 
-				utility[learning_player] += self.external_cfr_message(f"P:{learning_player},C:{self.env_aux.enc_player_hands[f'agent_{learning_player}']}->(P:{self.acting_player}", str(infoSet),  learning_player,  self.acting_player, t, probability_players)
+				if "2" in hand and "3" in hand:
+					hand = "FireGold"
+				elif "2" in hand:
+					hand = "FireFire"
+				elif "3" in hand:
+					hand = "GoldGold"
+
+					utility[learning_player] += self.external_cfr_message(f"P:{learning_player},C:{hand}->(P:{self.acting_player}", str(infoSet),  learning_player,  self.acting_player, t, probability_players)
+				utility[learning_player] += self.external_cfr_message(f"P:{learning_player},C:{hand}->(P:{self.acting_player}", str(infoSet),  learning_player,  self.acting_player, t, probability_players)
 				#print(player, utility[player])
 			utilities.append(utility.copy()/t)
 
@@ -232,11 +244,11 @@ class TempleCFR():
 			# Update regrets
 			for action in range(action_space_length):
 				regret = utility[action] - node_utility
-				self.nodes[history].regret_sum[action] += p_other*regret
+				self.nodes[history].regret_sum[action] += max(p_other*regret,0)
 				#print(regret)
 
 			for index_action in range(action_space_length):
-				self.nodes[history].strategy_sum[index_action] += strategy[index_action]*1000
+				self.nodes[history].strategy_sum[index_action] += strategy[index_action]*t
 
 			
 
@@ -286,9 +298,10 @@ class TempleCFR():
 		"""
 		#print('THIS IS ITERATION', t)
 
-		message_action_space = config.message_space_5
-		
 
+		message_action_space = config.message_space_5
+
+		# Build infoset by state
 		if infoSet not in self.nodes_state:
 			self.nodes_state[infoSet] = NodeState(len(message_action_space), copy.deepcopy(self.env_aux))
 		else:
@@ -296,22 +309,13 @@ class TempleCFR():
 			# Reset to original infoset env to run analysis again
 			self.nodes_state[infoSet].env = copy.deepcopy(self.nodes_state[infoSet].static_env)
 
+		# Build infoset by history
 		if history not in self.nodes:
 			self.nodes[history] = NodeInfoSet(len(self.env.action_spaces[f"agent_{acting_player}"]), history)
 		else:
 			self.nodes[history].number += 1	
 
-		done, winner = self.nodes_state[infoSet].env.referee()
-
-		# History is in a terminal state then calculate payments
-		if done:			
-			if self.nodes_state[infoSet].env.enc_player_role[f"agent_{learning_player}"] == winner:
-				return 100
-			else:
-				return -100
-
-
-
+		print(self.random_order)
 
 		if acting_player == learning_player:
 
@@ -325,7 +329,7 @@ class TempleCFR():
 				self.nodes_state[infoSet].env = copy.deepcopy(self.nodes_state[infoSet].static_env)
 				
 				# Step ahead
-				done, next_observation_spaces, _ = self.nodes_state[infoSet].env.step_message(action)
+				_, next_observation_spaces, _ = self.nodes_state[infoSet].env.step_message(action)
 
 
 
@@ -341,7 +345,7 @@ class TempleCFR():
 
 					utility[index] = self.external_cfr(history+f",A:{action})->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
 				else:
-					next_acting_player = self.nodes_state[infoSet].env.random_order[self.nodes_state[infoSet].env.provide_message]
+					next_acting_player = self.random_order[self.nodes_state[infoSet].env.provide_message]
 					nextInfoSet = self.nodes_state[infoSet].env.create_state(next_acting_player, next_observation_spaces)
 					utility[index] = self.external_cfr_message(history+f",A:{action})->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
 				
@@ -358,10 +362,10 @@ class TempleCFR():
 
 			for action in range(action_space_length):
 				regret = utility[action] - node_utility
-				self.nodes[history].regret_sum[action] += p_other*regret
+				self.nodes[history].regret_sum[action] += max(p_other*regret,0)
 
 			for index_action in range(action_space_length):
-				self.nodes[history].strategy_sum[index_action] += strategy[index_action]*1000
+				self.nodes[history].strategy_sum[index_action] += strategy[index_action]*t
 				#print(regret)
 
 
@@ -393,11 +397,13 @@ class TempleCFR():
 
 			# recursion
 			if self.nodes_state[infoSet].env.message_provided:
+				## If all messages were provided
 				next_acting_player = self.acting_player ## TO DO
 				nextInfoSet = self.nodes_state[infoSet].env.create_state(next_acting_player, next_observation_spaces)
 				utility = self.external_cfr(history+f",A:{message_action_space[action]})->(P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
 			else:
-				next_acting_player = self.nodes_state[infoSet].env.random_order[self.nodes_state[infoSet].env.provide_message]
+				## Another message needs to be provided
+				next_acting_player = self.random_order[self.nodes_state[infoSet].env.provide_message]
 				nextInfoSet = self.nodes_state[infoSet].env.create_state(next_acting_player, next_observation_spaces)
 				utility = self.external_cfr_message(history+f",A:{message_action_space[action]})->(P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players)				
 
