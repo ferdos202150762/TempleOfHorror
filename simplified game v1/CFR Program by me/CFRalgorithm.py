@@ -90,7 +90,7 @@ class TempleCFR():
 				self.env_aux = copy.deepcopy(self.env)
 				infoSet = self.env.create_state(learning_player, observation)
 
-				utility[learning_player] += self.external_cfr_message(f"P:{learning_player}, C:{self.env_aux.enc_player_hands[f'agent_{learning_player}']}-> (P:{self.acting_player}", str(infoSet),  learning_player,  self.acting_player, t, probability_players)
+				utility[learning_player] += self.external_cfr_message(f"P:{learning_player},C:{self.env_aux.enc_player_hands[f'agent_{learning_player}']}->(P:{self.acting_player}", str(infoSet),  learning_player,  self.acting_player, t, probability_players)
 				#print(player, utility[player])
 			utilities.append(utility.copy()/t)
 
@@ -104,6 +104,7 @@ class TempleCFR():
 	  
 
 	def external_cfr(self, history, infoSet, learning_player, acting_player, t, probability_players):
+
 		"""
 		Perform the CFR algorithm for a given information set.
 		
@@ -164,30 +165,30 @@ class TempleCFR():
 				if self.nodes_state[infoSet].env.enc_player_role[f"agent_{acting_player}"] == winner: ## If player won
 
 					if self.nodes_state[infoSet].env.enc_player_role[f"agent_{learning_player}"] == 1: 
-						return 2 + lying_payoff
+						return 2*10000 + lying_payoff
 					else:
-						return - 1 - .5*lying_payoff
+						return - 1*10000 - .5*lying_payoff
 				else:
 
 					if self.nodes_state[infoSet].env.enc_player_role[f"agent_{learning_player}"] == 1: 
-						return  - 2 - lying_payoff
+						return  - 2*10000 - lying_payoff
 					else:
-						return  1 + .5*lying_payoff
+						return  1*10000 + .5*lying_payoff
 					
 			else: ## If player is an Attacker 
 				if self.nodes_state[infoSet].env.enc_player_role[f"agent_{acting_player}"] == winner:
 
 					if self.nodes_state[infoSet].env.enc_player_role[f"agent_{learning_player}"] == 1: 
-						return -2 - lying_payoff
+						return -2*10000 - lying_payoff
 					else:
-						return 1 + .5*lying_payoff
+						return 1*10000 + .5*lying_payoff
 
 				else:
 
 					if self.nodes_state[infoSet].env.enc_player_role[f"agent_{learning_player}"] == 1: 
-						return 2 + lying_payoff
+						return 2*10000 + lying_payoff
 					else:
-						return -1 - .5*lying_payoff
+						return -1*10000 - .5*lying_payoff
 					
  
 				
@@ -214,7 +215,7 @@ class TempleCFR():
 				self.env_aux = copy.deepcopy(self.nodes_state[infoSet].env)
 
 
-				utility[index] = self.external_cfr(history+f", A:{action})-> ( P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
+				utility[index] = self.external_cfr(history+f",A:{action})->(P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
 				
 				
 				node_utility += strategy[index] * utility[index]
@@ -233,7 +234,10 @@ class TempleCFR():
 				regret = utility[action] - node_utility
 				self.nodes[history].regret_sum[action] += p_other*regret
 				#print(regret)
-				
+
+			for index_action in range(action_space_length):
+				self.nodes[history].strategy_sum[index_action] += strategy[index_action]*1000
+
 			
 
 			return node_utility
@@ -241,8 +245,11 @@ class TempleCFR():
 		else:  # Here is where self play is done
 
 			action_space_length = len(self.nodes_state[infoSet].env.action_spaces[f"agent_{acting_player}"])
-
-			strategy = self.nodes[history].get_strategy()
+			prefix_hist_learn = f"P:{learning_player},C:{self.env_aux.enc_player_hands[f'agent_{learning_player}']}->(P:{self.acting_player}"
+			prefix_hist_acting = f"P:{acting_player},C:{self.env_aux.enc_player_hands[f'agent_{acting_player}']}->(P:{self.acting_player}"
+			acting_history = history
+			acting_history.replace(prefix_hist_learn,prefix_hist_acting)
+			strategy = self.nodes[acting_history].get_strategy()
 			utility = 0
 
 			# Step ahead
@@ -250,6 +257,7 @@ class TempleCFR():
 				action = np.random.choice(self.nodes_state[infoSet].env.action_spaces[f"agent_{acting_player}"], p=strategy)
 			except:
 				action = self.nodes_state[infoSet].env.action_spaces[f"agent_{acting_player}"][0]
+
 			action_probability = strategy[self.nodes_state[infoSet].env.action_spaces[f"agent_{acting_player}"].index(action)]
 			next_acting_player = action
 			done, next_observation_spaces, _ = self.nodes_state[infoSet].env.step(action)
@@ -263,11 +271,9 @@ class TempleCFR():
 
 			# recursion
 
-			utility = self.external_cfr(history+f", A:{action})->( P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
+			utility = self.external_cfr(history+f",A:{action})->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
 
-			# Update strategy sum
-			for index_action in range(action_space_length):
-				self.nodes[history].strategy_sum[index_action] += probability_players[f"agent_{acting_player}"]*strategy[index_action]
+
 
 
 			return utility
@@ -333,11 +339,11 @@ class TempleCFR():
 					next_acting_player = self.acting_player ##  TO DO IT HAS TO BACK TO PREVIOUS
 					nextInfoSet = self.nodes_state[infoSet].env.create_state(next_acting_player, next_observation_spaces)
 
-					utility[index] = self.external_cfr(history+f", At:{action})-> ( P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
+					utility[index] = self.external_cfr(history+f",A:{action})->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
 				else:
 					next_acting_player = self.nodes_state[infoSet].env.random_order[self.nodes_state[infoSet].env.provide_message]
 					nextInfoSet = self.nodes_state[infoSet].env.create_state(next_acting_player, next_observation_spaces)
-					utility[index] = self.external_cfr_message(history+f", At:{action})->( P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
+					utility[index] = self.external_cfr_message(history+f",A:{action})->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
 				
 				node_utility += strategy[index] * utility[index]
 
@@ -353,7 +359,11 @@ class TempleCFR():
 			for action in range(action_space_length):
 				regret = utility[action] - node_utility
 				self.nodes[history].regret_sum[action] += p_other*regret
-				
+
+			for index_action in range(action_space_length):
+				self.nodes[history].strategy_sum[index_action] += strategy[index_action]*1000
+				#print(regret)
+
 
 			return node_utility
 
@@ -361,7 +371,11 @@ class TempleCFR():
 
 			action_space_length = len(message_action_space)
 
-			strategy = self.nodes[history].get_strategy()
+			prefix_hist_learn = f"P:{learning_player},C:{self.env_aux.enc_player_hands[f'agent_{learning_player}']}->(P:{self.acting_player}"
+			prefix_hist_acting = f"P:{acting_player},C:{self.env_aux.enc_player_hands[f'agent_{acting_player}']}->(P:{self.acting_player}"
+			acting_history = history
+			acting_history.replace(prefix_hist_learn,prefix_hist_acting)
+			strategy = self.nodes[acting_history].get_strategy()
 			utility = 0
 
 			# Step ahead
@@ -379,18 +393,14 @@ class TempleCFR():
 
 			# recursion
 			if self.nodes_state[infoSet].env.message_provided:
-
 				next_acting_player = self.acting_player ## TO DO
 				nextInfoSet = self.nodes_state[infoSet].env.create_state(next_acting_player, next_observation_spaces)
-				utility = self.external_cfr(history+f", At:{message_action_space[action]})-> ( P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
+				utility = self.external_cfr(history+f",A:{message_action_space[action]})->(P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
 			else:
 				next_acting_player = self.nodes_state[infoSet].env.random_order[self.nodes_state[infoSet].env.provide_message]
 				nextInfoSet = self.nodes_state[infoSet].env.create_state(next_acting_player, next_observation_spaces)
-				utility = self.external_cfr_message(history+f", At:{message_action_space[action]})-> ( P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players)				
+				utility = self.external_cfr_message(history+f",A:{message_action_space[action]})->(P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players)				
 
-			for index_action in range(action_space_length):
-				self.nodes[history].strategy_sum[index_action] += probability_players[f"agent_{acting_player}"]*strategy[index_action]
-				#print(regret)
 
 
 			return utility
