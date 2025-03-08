@@ -85,7 +85,7 @@ class TempleCFR():
 			random.shuffle(self.agents_order)
 			self.random_order = self.agents_order
 			self.acting_player = self.random_order[0]
-			print(self.acting_player)
+
 
 			for learning_player in range(0,3): # Players
 				#print("Player plays:", player)
@@ -217,7 +217,7 @@ class TempleCFR():
 				
 				# Step ahead
 				next_acting_player = action
-				done, next_observation_spaces, _ = self.nodes_state[infoSet].env.step(action)
+				done, next_observation_spaces, _, card = self.nodes_state[infoSet].env.step(action)
 				nextInfoSet = self.nodes_state[infoSet].env.create_state(next_acting_player, next_observation_spaces)
 
 
@@ -227,7 +227,7 @@ class TempleCFR():
 				self.env_aux = copy.deepcopy(self.nodes_state[infoSet].env)
 
 
-				utility[index] = self.external_cfr(history+f",A:{action})->(P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
+				utility[index] = self.external_cfr(history+f",A:{action})->(P:{next_acting_player},C:{card}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
 				
 				
 				node_utility += strategy[index] * utility[index]
@@ -272,7 +272,7 @@ class TempleCFR():
 
 			action_probability = strategy[self.nodes_state[infoSet].env.action_spaces[f"agent_{acting_player}"].index(action)]
 			next_acting_player = action
-			done, next_observation_spaces, _ = self.nodes_state[infoSet].env.step(action)
+			done, next_observation_spaces, _, card = self.nodes_state[infoSet].env.step(action)
 
 			nextInfoSet = self.nodes_state[infoSet].env.create_state(next_acting_player, next_observation_spaces)
 
@@ -283,7 +283,7 @@ class TempleCFR():
 
 			# recursion
 
-			utility = self.external_cfr(history+f",A:{action})->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
+			utility = self.external_cfr(history+f",A:{action})->(P:{next_acting_player},C:{card}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
 
 
 
@@ -315,7 +315,7 @@ class TempleCFR():
 		else:
 			self.nodes[history].number += 1	
 
-		print(self.random_order)
+
 
 		if acting_player == learning_player:
 
