@@ -360,4 +360,4 @@ class TempleOfHorror():
         
 
         
-        return self.done, state, rewards, card
+        return self.done, state, rewards, card[:-2]

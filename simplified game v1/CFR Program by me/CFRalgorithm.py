@@ -5,8 +5,8 @@ from tqdm import tqdm
 import config
 import random
 
-np.random.seed(42)
-random.seed(42)
+np.random.seed(45)
+random.seed(45)
 
 class NodeState:
 	def __init__(self, num_actions, env):
@@ -177,30 +177,30 @@ class TempleCFR():
 				if self.nodes_state[infoSet].env.enc_player_role[f"agent_{acting_player}"] == winner: ## If player won
 
 					if self.nodes_state[infoSet].env.enc_player_role[f"agent_{learning_player}"] == 1: 
-						return 2*10000 + lying_payoff
+						return 2 + lying_payoff
 					else:
-						return - 1*10000 - .5*lying_payoff
+						return - 1 - .5*lying_payoff
 				else:
 
 					if self.nodes_state[infoSet].env.enc_player_role[f"agent_{learning_player}"] == 1: 
-						return  - 2*10000 - lying_payoff
+						return  - 2 - lying_payoff
 					else:
-						return  1*10000 + .5*lying_payoff
+						return  1 + .5*lying_payoff
 					
 			else: ## If player is an Attacker 
 				if self.nodes_state[infoSet].env.enc_player_role[f"agent_{acting_player}"] == winner:
 
 					if self.nodes_state[infoSet].env.enc_player_role[f"agent_{learning_player}"] == 1: 
-						return -2*10000 - lying_payoff
+						return -2 - lying_payoff
 					else:
-						return 1*10000 + .5*lying_payoff
+						return 1 + .5*lying_payoff
 
 				else:
 
 					if self.nodes_state[infoSet].env.enc_player_role[f"agent_{learning_player}"] == 1: 
-						return 2*10000 + lying_payoff
+						return 2 + lying_payoff
 					else:
-						return -1*10000 - .5*lying_payoff
+						return -1 - .5*lying_payoff
 					
  
 				
@@ -227,7 +227,7 @@ class TempleCFR():
 				self.env_aux = copy.deepcopy(self.nodes_state[infoSet].env)
 
 
-				utility[index] = self.external_cfr(history+f",A:{action})->(P:{next_acting_player},C:{card}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
+				utility[index] = self.external_cfr(history+f",A:{action},C:{card})->(P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
 				
 				
 				node_utility += strategy[index] * utility[index]
@@ -283,7 +283,7 @@ class TempleCFR():
 
 			# recursion
 
-			utility = self.external_cfr(history+f",A:{action})->(P:{next_acting_player},C:{card}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
+			utility = self.external_cfr(history+f",A:{action},C:{card})->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
 
 
 
