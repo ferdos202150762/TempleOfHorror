@@ -87,7 +87,7 @@ class TempleCFR():
 			self.acting_player = self.random_order[0]
 
 
-			for learning_player in range(0,3): # Players
+			for learning_player in [2,1,0]: # Players
 				#print("Player plays:", player)
 				probability_players = {agent:1.0 for agent in self.env.agents} 
 				self.env_aux = copy.deepcopy(self.env)

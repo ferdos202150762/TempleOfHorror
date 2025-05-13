@@ -25,7 +25,7 @@ for episode in tqdm(range(NUMBER_EPISODES)):
         # Choose an action (for now, we will choose a random action)
 
         obs = env.create_observation(agent_key, state)
-        #print(state)
+        print(state)
         #print(env.action_spaces)
         agent_key = np.random.choice(env.action_spaces[f"agent_{agent_key}"])
 

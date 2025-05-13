@@ -74,7 +74,6 @@ class TempleOfHorror():
 
         self.history = ""
 
-        self.random_order = None
 
 
     def init_message_space(self):
@@ -181,7 +180,7 @@ class TempleOfHorror():
             - Player number
         """
         final = []
-        #final += world_state["public_message"].copy()
+        final += world_state["public_message"].copy()
         final += world_state["table_information"][f"agent_0"].copy()
         final += world_state["table_information"][f"agent_1"].copy()
         final += world_state["table_information"][f"agent_2"].copy()
@@ -262,7 +261,7 @@ class TempleOfHorror():
         self.provide_message = 0
         self.message_provided = False
         # Random Message Creation 
-        self.message_history = [0]*6
+        self.message_history = [-1]*6
 
 
 
