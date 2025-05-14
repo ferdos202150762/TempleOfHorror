@@ -1,0 +1,306 @@
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+from torch.distributions import Categorical
+import gymnasium as gym
+from gymnasium import spaces
+import numpy as np
+import matplotlib.pyplot as plt
+import random
+
+
+
+# --- Dummy Environment with Changing Action Spaces per Episode ---
+class VaryingActionSpaceEnv(gym.Env):
+    def __init__(self, obs_dim, action_dim_large, action_dim_small):
+        super().__init__()
+        self.obs_dim = obs_dim
+        self.action_dim_large = action_dim_large
+        self.action_dim_small = action_dim_small
+        
+        # Observation space is fixed
+        self.observation_space = spaces.Box(low=-1, high=1, shape=(obs_dim,), dtype=np.float32)
+        
+        # Action space will be set dynamically per episode
+        self._action_space_large = spaces.Discrete(action_dim_large)
+        self._action_space_small = spaces.Discrete(action_dim_small)
+        self.action_space = self._action_space_large # Default
+        
+        self.current_round_type = "large" # "large" or "small"
+        self.episode_step = 0
+        self.max_episode_steps = 50 # Shorter episodes to see round changes
+
+    def _set_round_type(self):
+        # Simple rule: alternate every episode, or randomly
+        if random.random() < 0.5: # Or use self.episode_count % 2 == 0
+            self.current_round_type = "large"
+            self.action_space = self._action_space_large
+            # print("Switched to LARGE action space")
+        else:
+            self.current_round_type = "small"
+            self.action_space = self._action_space_small
+            # print("Switched to SMALL action space")
+
+    def step(self, action):
+        # Action validation depends on current_round_type
+        if self.current_round_type == "large":
+            assert self._action_space_large.contains(action), f"Invalid action {action} for large space"
+        else:
+            assert self._action_space_small.contains(action), f"Invalid action {action} for small space"
+
+        self.episode_step += 1
+        obs = self.observation_space.sample()
+        
+        # Dummy reward, slightly different based on round type to encourage learning
+        if self.current_round_type == "large":
+            reward = (action / (self.action_dim_large -1)) - 0.5 + np.random.rand() * 0.1
+        else:
+            reward = (action / (self.action_dim_small -1)) * 2 - 1.0 + np.random.rand() * 0.1
+            
+        terminated = self.episode_step >= self.max_episode_steps
+        truncated = False 
+        info = {"round_type": self.current_round_type}
+        return obs, reward, terminated, truncated, info
+
+    def reset(self, seed=None, options=None):
+        super().reset(seed=seed)
+        self.episode_step = 0
+        self._set_round_type() # Determine action space for this new episode
+        obs = self.observation_space.sample()
+        info = {"round_type": self.current_round_type}
+        return obs, info
+
+    def render(self): pass
+    def close(self): pass
+
+# --- Actor-Critic RNN Network with Multiple Actor Heads ---
+class ActorCriticRNN(nn.Module):
+    def __init__(self, obs_dim, action_dim_large, action_dim_small, hidden_size):
+        super(ActorCriticRNN, self).__init__()
+        self.hidden_size = hidden_size
+        self.action_dim_large = action_dim_large
+        self.action_dim_small = action_dim_small
+
+        self.lstm = nn.LSTM(obs_dim, hidden_size, batch_first=True)
+        self.shared_fc = nn.Linear(hidden_size, hidden_size // 2)
+
+        # Actor heads
+        self.actor_head_large = nn.Linear(hidden_size // 2, action_dim_large)
+        self.actor_head_small = nn.Linear(hidden_size // 2, action_dim_small)
+
+        # Critic head
+        self.critic_head = nn.Linear(hidden_size // 2, 1)
+
+    def forward(self, obs, hidden_state):
+        lstm_out, next_hidden_state = self.lstm(obs, hidden_state)
+        shared_features = F.relu(self.shared_fc(lstm_out))
+
+        logits_large = self.actor_head_large(shared_features)
+        logits_small = self.actor_head_small(shared_features)
+        value = self.critic_head(shared_features)
+
+        return (logits_large, logits_small), value, next_hidden_state
+
+    def get_initial_hidden_state(self, batch_size=1):
+        h0 = torch.zeros(1, batch_size, self.hidden_size).to(DEVICE)
+        c0 = torch.zeros(1, batch_size, self.hidden_size).to(DEVICE)
+        return (h0, c0)
+
+# --- Rollout Buffer for Varying Action Spaces ---
+class RolloutBufferRNN:
+    def __init__(self, obs_dim, hidden_size, rollout_steps, sequence_length, gamma, gae_lambda):
+        self.obs_dim = obs_dim
+        self.hidden_size = hidden_size
+        self.rollout_steps = rollout_steps
+        self.sequence_length = sequence_length
+        self.gamma = gamma
+        self.gae_lambda = gae_lambda
+
+        self.observations = np.zeros((rollout_steps, obs_dim), dtype=np.float32)
+        self.actions = np.zeros((rollout_steps,), dtype=np.int64) # Action is single int
+        self.round_types = np.empty((rollout_steps,), dtype=object) # Store "large" or "small"
+        self.log_probs = np.zeros((rollout_steps,), dtype=np.float32)
+        self.rewards = np.zeros((rollout_steps,), dtype=np.float32)
+        self.dones = np.zeros((rollout_steps,), dtype=np.bool_)
+        self.values = np.zeros((rollout_steps,), dtype=np.float32)
+        
+        self.h_ins = np.zeros((rollout_steps, 1, hidden_size), dtype=np.float32)
+        self.c_ins = np.zeros((rollout_steps, 1, hidden_size), dtype=np.float32)
+
+        self.advantages = np.zeros((rollout_steps,), dtype=np.float32)
+        self.returns = np.zeros((rollout_steps,), dtype=np.float32)
+        self.ptr = 0
+
+    def add(self, obs, action, reward, done, log_prob, value, h_in, c_in, round_type):
+        assert self.ptr < self.rollout_steps
+        self.observations[self.ptr] = obs
+        self.actions[self.ptr] = action
+        self.round_types[self.ptr] = round_type # Store round type
+        self.rewards[self.ptr] = reward
+        self.dones[self.ptr] = done
+        self.log_probs[self.ptr] = log_prob
+        self.values[self.ptr] = value
+        self.h_ins[self.ptr] = h_in.cpu().numpy()
+        self.c_ins[self.ptr] = c_in.cpu().numpy()
+        self.ptr += 1
+    
+    def compute_gae_and_returns(self, last_value, last_done): # Same as before
+        advantage = 0
+        for t in reversed(range(self.rollout_steps)):
+            if t == self.rollout_steps - 1:
+                next_non_terminal = 1.0 - last_done
+                next_value = last_value
+            else:
+                next_non_terminal = 1.0 - self.dones[t + 1]
+                next_value = self.values[t + 1]
+            delta = self.rewards[t] + self.gamma * next_value * next_non_terminal - self.values[t]
+            advantage = delta + self.gamma * self.gae_lambda * next_non_terminal * advantage
+            self.advantages[t] = advantage
+        self.returns = self.advantages + self.values
+        self.advantages = (self.advantages - self.advantages.mean()) / (self.advantages.std() + 1e-8)
+
+
+    def get_sequences(self, batch_size):
+        num_samples = self.rollout_steps - self.sequence_length + 1
+        if num_samples <= 0: return []
+
+        indices = np.arange(num_samples)
+        np.random.shuffle(indices)
+
+        for i in range(0, num_samples, batch_size):
+            batch_indices = indices[i:i + batch_size]
+            if len(batch_indices) == 0: continue
+
+            seq_obs, seq_actions, seq_log_probs, seq_advantages, seq_returns = [], [], [], [], []
+            seq_h_initial, seq_c_initial = [], []
+            seq_round_types_initial = [] # Store the round type for the *start* of the sequence
+
+            for start_idx in batch_indices:
+                end_idx = start_idx + self.sequence_length
+                seq_obs.append(self.observations[start_idx:end_idx])
+                seq_actions.append(self.actions[start_idx:end_idx])
+                seq_log_probs.append(self.log_probs[start_idx:end_idx])
+                seq_advantages.append(self.advantages[start_idx:end_idx])
+                seq_returns.append(self.returns[start_idx:end_idx])
+                seq_h_initial.append(self.h_ins[start_idx])
+                seq_c_initial.append(self.c_ins[start_idx])
+                # We assume the round_type for the first step of sequence applies to the whole training sequence
+                # This is a simplification. If round_type can change *within* a sequence_length,
+                # the update logic would need to be more granular.
+                seq_round_types_initial.append(self.round_types[start_idx])
+
+
+            yield (
+                torch.tensor(np.array(seq_obs), dtype=torch.float32).to(DEVICE),
+                torch.tensor(np.array(seq_actions), dtype=torch.int64).to(DEVICE),
+                torch.tensor(np.array(seq_log_probs), dtype=torch.float32).to(DEVICE),
+                torch.tensor(np.array(seq_advantages), dtype=torch.float32).to(DEVICE),
+                torch.tensor(np.array(seq_returns), dtype=torch.float32).to(DEVICE),
+                (torch.tensor(np.array(seq_h_initial), dtype=torch.float32).transpose(0,1).to(DEVICE),
+                 torch.tensor(np.array(seq_c_initial), dtype=torch.float32).transpose(0,1).to(DEVICE)),
+                np.array(seq_round_types_initial) # batch_size array of strings
+            )
+    def clear(self): self.ptr = 0
+
+
+# --- PPO Agent for Varying Action Spaces ---
+class PPO_RNN_Agent:
+    def __init__(self, obs_dim, action_dim_large, action_dim_small, hidden_size, lr, gamma, gae_lambda,
+                 ppo_clip_eps, ppo_epochs, minibatch_size, sequence_length,
+                 entropy_coef, value_coef, max_grad_norm, rollout_steps):
+        self.policy = ActorCriticRNN(obs_dim, action_dim_large, action_dim_small, hidden_size).to(DEVICE)
+        self.optimizer = optim.Adam(self.policy.parameters(), lr=lr)
+        
+        self.action_dim_large = action_dim_large
+        self.action_dim_small = action_dim_small
+        self.gamma = gamma
+        self.gae_lambda = gae_lambda
+        self.ppo_clip_eps = ppo_clip_eps
+        self.ppo_epochs = ppo_epochs
+        self.minibatch_size = minibatch_size
+        self.sequence_length = sequence_length
+        self.entropy_coef = entropy_coef
+        self.value_coef = value_coef
+        self.max_grad_norm = max_grad_norm
+
+        self.buffer = RolloutBufferRNN(obs_dim, hidden_size, rollout_steps, sequence_length, gamma, gae_lambda)
+
+    def select_action(self, obs, hidden_state, current_round_type, deterministic=False):
+        obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0).to(DEVICE) # (1, 1, obs_dim)
+        
+        with torch.no_grad():
+            (logits_large, logits_small), value, next_hidden_state = self.policy(obs_tensor, hidden_state)
+            # logits_large/small: (1, 1, action_dim_*)
+
+        if current_round_type == "large":
+            dist = Categorical(logits=logits_large.squeeze(1))
+        elif current_round_type == "small":
+            dist = Categorical(logits=logits_small.squeeze(1))
+        else:
+            raise ValueError(f"Unknown round_type: {current_round_type}")
+
+        if deterministic:
+            action = torch.argmax(dist.probs, dim=-1)
+        else:
+            action = dist.sample()
+        
+        log_prob = dist.log_prob(action)
+        return action.item(), log_prob.item(), value.item(), next_hidden_state
+
+    def update(self):
+        for _ in range(self.ppo_epochs):
+            for batch_obs, batch_actions, batch_old_log_probs, \
+                batch_advantages, batch_returns, batch_initial_hidden, \
+                batch_initial_round_types in self.buffer.get_sequences(self.minibatch_size):
+
+                # batch_obs: (minibatch_size, sequence_length, obs_dim)
+                # batch_actions: (minibatch_size, sequence_length)
+                # batch_initial_round_types: (minibatch_size,) array of strings
+
+                (new_logits_large_seq, new_logits_small_seq), new_values_seq, _ = \
+                    self.policy(batch_obs, batch_initial_hidden)
+                # new_logits_*: (minibatch_size, sequence_length, action_dim_*)
+                new_values_seq = new_values_seq.squeeze(-1) # (minibatch_size, sequence_length)
+
+                # Process each sequence in the batch according to its initial round type
+                new_log_probs_list = []
+                entropy_list = []
+
+                for b in range(batch_obs.size(0)): # Iterate over sequences in the minibatch
+                    seq_round_type = batch_initial_round_types[b]
+                    seq_actions = batch_actions[b] # (sequence_length,)
+
+                    if seq_round_type == "large":
+                        seq_logits = new_logits_large_seq[b] # (sequence_length, action_dim_large)
+                    elif seq_round_type == "small":
+                        seq_logits = new_logits_small_seq[b] # (sequence_length, action_dim_small)
+                    else:
+                        raise ValueError(f"Unknown round_type in batch: {seq_round_type}")
+                    
+                    dist = Categorical(logits=seq_logits)
+                    new_log_probs_list.append(dist.log_prob(seq_actions)) # (sequence_length,)
+                    entropy_list.append(dist.entropy()) # (sequence_length,)
+                
+                # Stack to form tensors: (minibatch_size, sequence_length)
+                new_log_probs = torch.stack(new_log_probs_list)
+                entropies = torch.stack(entropy_list)
+                mean_entropy = entropies.mean()
+
+                ratio = torch.exp(new_log_probs - batch_old_log_probs) # batch_old_log_probs is also (minibatch, seq_len)
+
+                surr1 = ratio * batch_advantages
+                surr2 = torch.clamp(ratio, 1.0 - self.ppo_clip_eps, 1.0 + self.ppo_clip_eps) * batch_advantages
+                policy_loss = -torch.min(surr1, surr2).mean()
+
+                value_loss = F.mse_loss(new_values_seq, batch_returns)
+                loss = policy_loss + self.value_coef * value_loss - self.entropy_coef * mean_entropy
+
+                self.optimizer.zero_grad()
+                loss.backward()
+                if self.max_grad_norm > 0:
+                    torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
+                self.optimizer.step()
+        
+        self.buffer.clear()
+
