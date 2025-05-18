@@ -237,10 +237,7 @@ class TempleOfHorror():
         # Random Message Creation 
         self.message_space = []
         #self.random_message( .01)
-        agents = [0,1,2]
-        random.shuffle(agents)
 
-        self.random_order = agents
 
 
 
@@ -336,10 +333,10 @@ class TempleOfHorror():
                 for agent in self.agents: 
                     if agent != f"agent_{agent_number}":
                         self.action_spaces[agent].remove(agent_number)
-
+            return card
 
         # Open Card (Update Action Space and Observation State)
-        open_card(action)
+        card = open_card(action)
         # See if self.done. 
         self.done, winner = self.referee()
         # Compute Reward For all agents
@@ -363,4 +360,4 @@ class TempleOfHorror():
         
 
         
-        return self.done, state, rewards
+        return self.done, state, rewards, card[:-2]

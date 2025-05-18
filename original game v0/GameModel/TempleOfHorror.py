@@ -47,7 +47,7 @@ class TempleOfHorror():
 
 
     def set_action_space(self):
-       ### Fix action space
+       ### Action space are the other agents. 
         for agent in self.agents:
             for e, _agent in enumerate(self.agents):
                 if agent != _agent:
@@ -115,22 +115,25 @@ class TempleOfHorror():
         """
 
         if self.enc_player_role[agent] == winner:
-                return 100
+                return 1
         else:
-                return -100
+                return -1
 
             
 
     def create_state(self, player_number, state):
 
-
+        # Public Messages
         final = state["public_message"].copy()
+        # Game Turn
         final.append(int(state["turn"]))
+        # Private Information
         final.append(state["private_role"][f"agent_{player_number}"])
         final += state["private_information"][f"agent_0"].copy()
         final += state["private_information"][f"agent_1"].copy()
         final += state["private_information"][f"agent_2"].copy()
         final.append(state["private_role"][f"agent_{player_number}"])
+        # Public Information
         final.append(state["score"]["gold"])
         final.append(state["score"]["fire"])   
         final.append(state["score"]["empty"]) 
