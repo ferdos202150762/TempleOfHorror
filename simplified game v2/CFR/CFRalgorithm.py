@@ -97,7 +97,7 @@ class TempleCFR():
 
 				hand = config.compute_hand_from_labels(self.env_aux.player_hands[f'agent_{learning_player}'])
 
-				utility[learning_player] += self.external_cfr_message(f"ActingP:{learning_player},{self.env_aux.player_role[f'agent_{learning_player}'][:-2]},C:{hand}::GameInits->(P:{self.acting_player}", str(infoSet),  learning_player,  self.acting_player, t, probability_players)
+				utility[learning_player] += self.external_cfr_message(f"ActingP:{learning_player},{self.env_aux.player_role[f'agent_{learning_player}'][:-2]},C:{hand}GameInits->(P:{self.acting_player}", str(infoSet),  learning_player,  self.acting_player, t, probability_players)
 				#print(player, utility[player])
 			utilities.append(utility.copy()/t)
 
