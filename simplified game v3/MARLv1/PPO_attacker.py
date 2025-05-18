@@ -8,71 +8,9 @@ from gymnasium import spaces
 import numpy as np
 import matplotlib.pyplot as plt
 import random
+from config import *
 
 
-
-# --- Dummy Environment with Changing Action Spaces per Episode ---
-class VaryingActionSpaceEnv(gym.Env):
-    def __init__(self, obs_dim, action_dim_large, action_dim_small):
-        super().__init__()
-        self.obs_dim = obs_dim
-        self.action_dim_large = action_dim_large
-        self.action_dim_small = action_dim_small
-        
-        # Observation space is fixed
-        self.observation_space = spaces.Box(low=-1, high=1, shape=(obs_dim,), dtype=np.float32)
-        
-        # Action space will be set dynamically per episode
-        self._action_space_large = spaces.Discrete(action_dim_large)
-        self._action_space_small = spaces.Discrete(action_dim_small)
-        self.action_space = self._action_space_large # Default
-        
-        self.current_round_type = "large" # "large" or "small"
-        self.episode_step = 0
-        self.max_episode_steps = 50 # Shorter episodes to see round changes
-
-    def _set_round_type(self):
-        # Simple rule: alternate every episode, or randomly
-        if random.random() < 0.5: # Or use self.episode_count % 2 == 0
-            self.current_round_type = "large"
-            self.action_space = self._action_space_large
-            # print("Switched to LARGE action space")
-        else:
-            self.current_round_type = "small"
-            self.action_space = self._action_space_small
-            # print("Switched to SMALL action space")
-
-    def step(self, action):
-        # Action validation depends on current_round_type
-        if self.current_round_type == "large":
-            assert self._action_space_large.contains(action), f"Invalid action {action} for large space"
-        else:
-            assert self._action_space_small.contains(action), f"Invalid action {action} for small space"
-
-        self.episode_step += 1
-        obs = self.observation_space.sample()
-        
-        # Dummy reward, slightly different based on round type to encourage learning
-        if self.current_round_type == "large":
-            reward = (action / (self.action_dim_large -1)) - 0.5 + np.random.rand() * 0.1
-        else:
-            reward = (action / (self.action_dim_small -1)) * 2 - 1.0 + np.random.rand() * 0.1
-            
-        terminated = self.episode_step >= self.max_episode_steps
-        truncated = False 
-        info = {"round_type": self.current_round_type}
-        return obs, reward, terminated, truncated, info
-
-    def reset(self, seed=None, options=None):
-        super().reset(seed=seed)
-        self.episode_step = 0
-        self._set_round_type() # Determine action space for this new episode
-        obs = self.observation_space.sample()
-        info = {"round_type": self.current_round_type}
-        return obs, info
-
-    def render(self): pass
-    def close(self): pass
 
 # --- Actor-Critic RNN Network with Multiple Actor Heads ---
 class ActorCriticRNN(nn.Module):
@@ -91,6 +29,11 @@ class ActorCriticRNN(nn.Module):
 
         # Critic head
         self.critic_head = nn.Linear(hidden_size // 2, 1)
+    
+    def update_lstm(self, obs, hidden_state):
+        _, next_hidden_state = self.lstm(obs, hidden_state)
+
+        return next_hidden_state        
 
     def forward(self, obs, hidden_state):
         lstm_out, next_hidden_state = self.lstm(obs, hidden_state)
@@ -159,6 +102,7 @@ class RolloutBufferRNN:
             self.advantages[t] = advantage
         self.returns = self.advantages + self.values
         self.advantages = (self.advantages - self.advantages.mean()) / (self.advantages.std() + 1e-8)
+
 
 
     def get_sequences(self, batch_size):
