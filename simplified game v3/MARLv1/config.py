@@ -6,18 +6,18 @@ ACTION_DIM_SMALL = 2
 OBS_DIM_DUMMY = 4
 HIDDEN_SIZE = 64
 LR = 3e-4
-GAMMA = 0.95
-GAE_LAMBDA = 0.95
+GAMMA = 0.98
+GAE_LAMBDA = 0.99
 PPO_CLIP_EPS = 0.2
-PPO_EPOCHS = 10
-MINIBATCH_SIZE = 32
-ROLLOUT_STEPS = 15
-SEQUENCE_LENGTH = 16
-ENTROPY_COEF = 0.01
+PPO_EPOCHS = 4
+MINIBATCH_SIZE = 64
+ROLLOUT_STEPS = 128
+SEQUENCE_LENGTH = 10
+ENTROPY_COEF = 0.05
 VALUE_COEF = 0.5
 MAX_GRAD_NORM = 0.5
 
-TOTAL_TIMESTEPS = 100_000 # Adjusted for potentially slower learning
+TOTAL_TIMESTEPS = 1_000 # Adjusted for potentially slower learning
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {DEVICE}")
 
