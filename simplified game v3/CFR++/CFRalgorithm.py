@@ -20,8 +20,7 @@ class NodeState:
 		self.env = copy.deepcopy(self.static_env)
 	
 
-	
-	
+		
 class NodeInfoSet:
 	def __init__(self, num_actions, history):
 		self.regret_sum = np.zeros(num_actions)
@@ -75,7 +74,7 @@ class TempleCFR():
 		self.env = TempleOfHorror()
 		self.env_aux = copy.deepcopy(self.env)
 		self.acting_player = None
-		self.agents_order = [0,1,2]
+		self.agents_order = [0,1,2,3]
 
 	def cfr_iterations_external(self):
 		utilities = list()
@@ -87,7 +86,7 @@ class TempleCFR():
 			self.acting_player = self.random_order[0]
 
 
-			for learning_player in [0,1,2]: # Players
+			for learning_player in [0,1,2,3]: # Players
 				#print("Player plays:", player)
 				probability_players = {agent:1.0 for agent in self.env.agents} 
 				self.env_aux = copy.deepcopy(self.env)
@@ -125,7 +124,8 @@ class TempleCFR():
 		Returns:
 		float: The utility value for the current state.
 		"""
-		#print('THIS IS ITERATION', t)
+	
+
 
 		# Build infoset
 		if infoSet not in self.nodes_state:
@@ -145,7 +145,8 @@ class TempleCFR():
 
 		# History is in a terminal state then calculate payments
 		if done:		
-
+			
+			# To change
 			fire_message_0 = self.nodes_state[infoSet].env.message_history[0]> 0
 			fire_message_1 = self.nodes_state[infoSet].env.message_history[2]> 0
 			fire_message_2 = self.nodes_state[infoSet].env.message_history[4]> 0
@@ -222,20 +223,35 @@ class TempleCFR():
 				# Update global env after state change
 				self.env_aux = copy.deepcopy(self.nodes_state[infoSet].env)
 
+				# new message stage
+				if self.nodes_state[infoSet].env.message_provided:
 
-				utility[index] = self.external_cfr(history+f",A:{action},C:{card})->(P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
+					next_acting_player = self.acting_player 
+					nextInfoSet = self.nodes_state[infoSet].env.create_observation(next_acting_player, next_observation_spaces)
+
+					utility[index] = self.external_cfr(history+f",A:{action})->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
+				else:
+					print("New Round")
+					next_acting_player = self.random_order[self.nodes_state[infoSet].env.provide_message]
+					hand = config.compute_hand_from_labels(self.env_aux.player_hands[f'agent_{learning_player}'])
+					nextInfoSet = self.nodes_state[infoSet].env.create_observation(next_acting_player, next_observation_spaces)
+					utility[index] = self.external_cfr_message(history+f",A:{action})->(P:{next_acting_player}"+f"NEW-TURN:{hand}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
 				
+
+
 				
 				node_utility += strategy[index] * utility[index]
 
 
 
 			if learning_player==0:
-				p_other = probability_players["agent_1"]*probability_players["agent_2"]
+				p_other = probability_players["agent_1"]*probability_players["agent_2"]*probability_players["agent_3"]
 			elif learning_player==1:
-				p_other = probability_players["agent_0"]*probability_players["agent_2"]
+				p_other = probability_players["agent_0"]*probability_players["agent_2"]*probability_players["agent_3"]
+			elif learning_player==2:
+				p_other = probability_players["agent_0"]*probability_players["agent_1"]*probability_players["agent_3"]	
 			else:
-				p_other = probability_players["agent_0"]*probability_players["agent_1"]				
+				p_other = probability_players["agent_0"]*probability_players["agent_1"]*probability_players["agent_2"]			
 
 			# Update regrets
 			for action in range(action_space_length):
@@ -295,7 +311,9 @@ class TempleCFR():
 		#print('THIS IS ITERATION', t)
 
 
-		message_action_space = config.message_space
+		message_action_space = self.env_aux.message_space
+		print("Round:", self.env_aux.round)
+		print("Message action space:", message_action_space)
 
 		# Build infoset by state
 		if infoSet not in self.nodes_state:
@@ -334,8 +352,8 @@ class TempleCFR():
 				self.env_aux = copy.deepcopy(self.nodes_state[infoSet].env)
 
 				if self.nodes_state[infoSet].env.message_provided:
-
-					next_acting_player = self.acting_player ##  TO DO IT HAS TO BACK TO PREVIOUS
+					print("End Message Stage")
+					next_acting_player = self.acting_player 
 					nextInfoSet = self.nodes_state[infoSet].env.create_observation(next_acting_player, next_observation_spaces)
 
 					utility[index] = self.external_cfr(history+f",A:{action})->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players)
@@ -394,6 +412,7 @@ class TempleCFR():
 
 			# recursion
 			if self.nodes_state[infoSet].env.message_provided:
+				print("End Message Stage")
 				## If all messages were provided
 				next_acting_player = self.acting_player ## TO DO
 				nextInfoSet = self.nodes_state[infoSet].env.create_observation(next_acting_player, next_observation_spaces)

@@ -1,9 +1,3 @@
-message_space = []
-
-for num_gold in range(0, 4):
-    for num_fire in range(0, 3):
-        if num_gold + num_fire <= 3:
-            message_space.append((num_fire, num_gold))
 
 def compute_hand_from_labels(hand):
     # Map label prefixes to normalized names
