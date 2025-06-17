@@ -55,7 +55,7 @@ episode_reward = 0
 # --- Training Loop ---
 while total_timesteps < TOTAL_TIMESTEPS:   
     # Iterate over learning agents by rollout steps as in CFR.
-    for learning_agent in ["attacker", "defender"]:
+    for learning_agent in ["defender"]:
         learning_agent_nn = agents[learning_agent]
         learning_agent_nn.policy.train()
         step = 0
@@ -99,6 +99,7 @@ while total_timesteps < TOTAL_TIMESTEPS:
                 step += 1
                 all_episode_rewards[learning_agent].append(episode_reward)
             else: # Opponent Agent (not learning)
+
                 current_h, current_c = hidden_states_map[acting_player[:-2]]
                 opponent_agent = agents[acting_player[:-2]]
                 opponent_agent.policy.eval()
@@ -110,7 +111,7 @@ while total_timesteps < TOTAL_TIMESTEPS:
                 if not env.message_provided:
                     action_index, log_prob, value, (next_h, next_c) = opponent_agent.select_action(obs.reshape(1, -1), (current_h, current_c), "large", deterministic=True)
                     reward = 0 
-                    action = env.message_space[action_index]
+                    action = env.message_space[0]
                     done = False
                     # choose a message
                     next_state = env.step_message(action) 
@@ -118,7 +119,7 @@ while total_timesteps < TOTAL_TIMESTEPS:
                     acting_player = env.player_role[f"agent_{env.provide_message}"]  
                 else:                 
                     action_index, log_prob, value, (next_h, next_c) = opponent_agent.select_action(obs.reshape(1, -1), (current_h, current_c), "small", deterministic=True)
-                    action = env.action_spaces[f"agent_{agent_number}"][action_index]
+                    action = env.action_spaces[f"agent_{agent_number}"][0]
 
                     # Take the action in the environment
                     done, next_state, reward,  info, winner = env.step(action)                  
@@ -133,7 +134,7 @@ while total_timesteps < TOTAL_TIMESTEPS:
 
 
             if done:
-                print(env.round)
+
                 state = env.reset()
                 acting_player = env.player_role['agent_0']
                 agent = agents[acting_player[:-2]]
@@ -144,7 +145,7 @@ while total_timesteps < TOTAL_TIMESTEPS:
                 }
                 if episode_num % 10 == 0:
                     avg_rew = np.mean(all_episode_rewards[learning_agent][-20:]) if len(all_episode_rewards[learning_agent]) > 0 else 0.0
-                    print(f"Ep: {episode_num}, Steps: {total_timesteps}, AvgRew: {avg_rew:.2f}, EpRew: {episode_reward:.2f}")
+                    #print(f"Ep: {episode_num}, Steps: {total_timesteps}, AvgRew: {avg_rew:.2f}, EpRew: {episode_reward:.2f}")
                 episode_reward = 0
                 episode_num += 1
 
@@ -158,9 +159,11 @@ while total_timesteps < TOTAL_TIMESTEPS:
             learning_agent_nn.buffer.compute_gae_and_returns(last_value, done)
             
 
-        print(f"Global grad enabled before calling update for {learning_agent}: {torch.is_grad_enabled()}") # Should be True
-        entropy = learning_agent_nn.update()
-        entropy_agents[learning_agent].append(entropy)
+        #print(f"Global grad enabled before calling update for {learning_agent}: {torch.is_grad_enabled()}") # Should be True
+        loss, policy_loss, value_loss = learning_agent_nn.update()
+        # Print loss policy loss 
+        print(f"Step {step},"
+                f"Loss: {loss}, Policy Loss: {policy_loss}, Value Loss: {value_loss}")
 
         """
         print("Update (NO_GRAD BLOCK TEMPORARILY DISABLED FOR DEBUG)")
@@ -196,9 +199,9 @@ num_episodes_defender = len(all_episode_rewards['defender'])
 # It's possible one agent has more recorded episodes if training stops mid-episode
 # or if logging is slightly off. We'll plot up to the minimum length for aligned comparison.
 min_episodes = min(num_episodes_attacker, num_episodes_defender)
+"""
 if min_episodes == 0:
-    print("No episode rewards recorded for one or both agents. Cannot plot.")
-else:
+
     # Plot Attacker Rewards
     plt.plot(
         np.arange(min_episodes),
@@ -220,17 +223,7 @@ else:
     # Smoothing Window
     N = 20  # You can adjust this
 
-    # Smoothed Attacker Rewards
-    if num_episodes_attacker >= N:
-        smoothed_attacker = np.convolve(all_episode_rewards['attacker'], np.ones(N)/N, mode='valid')
-        # Adjust x-axis for smoothed plot: starts after N-1 initial points
-        plt.plot(
-            np.arange(N - 1, num_episodes_attacker), # Use full length of attacker rewards for its smooth plot
-            smoothed_attacker,
-            label=f'Attacker Smoothed (window {N})',
-            color=smooth_plot_colors['attacker'],
-            linewidth=2
-        )
+
 
     # Smoothed Defender Rewards
     if num_episodes_defender >= N:
@@ -243,16 +236,7 @@ else:
             linewidth=2
         )
 
-    # both agents' smoothed plots
-    if num_episodes_defender >= N:
-        smoothed_defender = np.convolve(all_episode_rewards['defender'], np.ones(N)/N, mode='valid') + np.convolve(all_episode_rewards['attacker'], np.ones(N)/N, mode='valid') 
-        plt.plot(
-            np.arange(N - 1, num_episodes_defender), # Use full length of defender rewards for its smooth plot
-            smoothed_defender,
-            label=f'Both Smoothed (window {N})',
-            color="red",
-            linewidth=2
-        )
+
 
     plt.xlabel("Episode")
     plt.ylabel("Total Reward per Episode")
@@ -272,4 +256,4 @@ print(f"Final episode reward (might be incomplete): {episode_reward}")
 print(entropy_agents)
 
 # Plotting
-# ... (your plotting code) ...
+# ... (your plotting code) ..."""

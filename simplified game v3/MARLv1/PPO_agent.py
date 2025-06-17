@@ -252,8 +252,8 @@ class PPO_RNN_Agent:
                 policy_loss = -torch.min(surr1, surr2).mean()
                 value_loss = F.mse_loss(new_values_seq, batch_returns)
                 
-                loss = policy_loss + self.value_coef * value_loss - self.entropy_coef * mean_entropy
-                #loss = policy_loss + self.value_coef * value_loss                
+                #loss = policy_loss + self.value_coef * value_loss - self.entropy_coef * mean_entropy
+                loss = policy_loss + self.value_coef * value_loss                
 
 
                 self.optimizer.zero_grad()
@@ -261,8 +261,10 @@ class PPO_RNN_Agent:
                 if self.max_grad_norm > 0:
                     torch.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
                 self.optimizer.step()
-        print(f"Mean entropy: {mean_entropy}")
+
+
+
         
         self.buffer.clear()
-        return mean_entropy.item()
+        return loss.item(), policy_loss.item(),  value_loss.item()   
 

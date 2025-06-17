@@ -166,7 +166,7 @@ class TempleOfHorror():
         if self.enc_player_role[agent] == winner:
             return 5
         else:
-            return -5
+            return -5*0
 
             
 
@@ -208,14 +208,14 @@ class TempleOfHorror():
 
         if self.score["gold"] == 4:
 
-            print("*******************")
-            print("** ATTACKERS WIN **")
-            print("*******************")
+            #print("*******************")
+            #print("** ATTACKERS WIN **")
+            #print("*******************")
             return True, 0
         elif  self.score["fire"] == 2:
-            print("*******************")
-            print("** DEFENDERS WIN **")
-            print("*******************")
+            #print("*******************")
+            #print("** DEFENDERS WIN **")
+            #print("*******************")
             return True, 1
         else:
             return False, None
@@ -403,7 +403,7 @@ class TempleOfHorror():
                 elif "empty" in card:
                     rewards.append(0)
                 else:
-                    rewards.append(-1)
+                    rewards.append(-1*0)
 
             if self.turns == self.N:
                 self.turns = 0
