@@ -16,11 +16,11 @@
 ###    - -100 for defender if he loses
 ###    - -50 for attacker if he loses
 ### 5. End of game:
-###    - 4 gold cards, OR
+###    - 3 gold cards, OR
 ###    - 2 fire cards
 ### 6. Deck:
-###    - 3 empty cards
-###    - 4 gold cards
+###    - 4 empty cards
+###    - 3 gold cards
 ###    - 2 fire cards
 
 
@@ -82,7 +82,7 @@ class TempleOfHorror():
         The message space is a list of two integers representing all combinations of number of fire, and gold cards respectively.
         """
         for num_gold in range(0, 4):
-            for num_fire in range(0, 3):
+            for num_fire in range(0, 2):
                 if num_gold + num_fire <= 3:
                     self.message_space.append((num_fire, num_gold))
 

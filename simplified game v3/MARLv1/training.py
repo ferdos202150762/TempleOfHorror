@@ -5,7 +5,7 @@ import numpy as np
 from tqdm import tqdm
 from sys import argv
 from config import *
-from PPO_attacker import PPO_RNN_Agent
+from PPO_agent import PPO_RNN_Agent
 import torch
 import matplotlib.pyplot as plt
 
@@ -36,6 +36,8 @@ total_timesteps = 0
 episode_num = 0
 
 all_episode_rewards = {'attacker': [], 'defender': []}
+all_episode_reward = []
+entropy_agents = {'attacker': [], 'defender': []}
 
 state = env.reset()
 acting_player = env.player_role['agent_0']
@@ -46,6 +48,8 @@ hidden_states_map = {
     "defender": agents["defender"].policy.get_initial_hidden_state(batch_size=1)
 }
 
+# training.py
+print(f"Initial global grad enabled: {torch.is_grad_enabled()}") # Should be True
 
 episode_reward = 0
 # --- Training Loop ---
@@ -53,7 +57,13 @@ while total_timesteps < TOTAL_TIMESTEPS:
     # Iterate over learning agents by rollout steps as in CFR.
     for learning_agent in ["attacker", "defender"]:
         learning_agent_nn = agents[learning_agent]
-        for step in range(ROLLOUT_STEPS):
+        learning_agent_nn.policy.train()
+        step = 0
+        while step < ROLLOUT_STEPS:
+            if not env.message_provided and env.provide_message == 0:
+                # Reset acting agent when messages start again
+                acting_player = env.player_role['agent_0']
+
             if acting_player[:-2] == learning_agent: # Learning Agent
                 current_h, current_c = hidden_states_map[learning_agent]
 
@@ -75,6 +85,7 @@ while total_timesteps < TOTAL_TIMESTEPS:
                     learning_agent_nn.buffer.add(obs, action_index, reward, done, log_prob, value, h_in_for_buffer, c_in_for_buffer, "large")
                     episode_reward += reward
                     acting_player = env.player_role[f"agent_{env.provide_message}"]
+
                 else:                 # Choose an action (for now, we will choose a random action)
 
                     action_index, log_prob, value, (next_h, next_c) = learning_agent_nn.select_action(obs.reshape(1, -1), (current_h, current_c), "small")
@@ -85,18 +96,19 @@ while total_timesteps < TOTAL_TIMESTEPS:
                     learning_agent_nn.buffer.add(obs, action_index, reward[agent_number], done, log_prob, value, h_in_for_buffer, c_in_for_buffer, "small")           
                     episode_reward += reward[agent_number]
                     acting_player = env.player_role[f"agent_{action}"] 
-
+                step += 1
                 all_episode_rewards[learning_agent].append(episode_reward)
             else: # Opponent Agent (not learning)
                 current_h, current_c = hidden_states_map[acting_player[:-2]]
                 opponent_agent = agents[acting_player[:-2]]
+                opponent_agent.policy.eval()
                 agent_number = env.player_number[acting_player]
                 h_in_for_buffer = current_h.clone()
                 c_in_for_buffer = current_c.clone()
                 obs = env.create_observation(agent_number, state)
                 # Message stage
                 if not env.message_provided:
-                    action_index, log_prob, value, (next_h, next_c) = opponent_agent.select_action(obs.reshape(1, -1), (current_h, current_c), "large")
+                    action_index, log_prob, value, (next_h, next_c) = opponent_agent.select_action(obs.reshape(1, -1), (current_h, current_c), "large", deterministic=True)
                     reward = 0 
                     action = env.message_space[action_index]
                     done = False
@@ -105,7 +117,7 @@ while total_timesteps < TOTAL_TIMESTEPS:
                     next_obs = env.create_observation(agent_number, next_state) 
                     acting_player = env.player_role[f"agent_{env.provide_message}"]  
                 else:                 
-                    action_index, log_prob, value, (next_h, next_c) = opponent_agent.select_action(obs.reshape(1, -1), (current_h, current_c), "small")
+                    action_index, log_prob, value, (next_h, next_c) = opponent_agent.select_action(obs.reshape(1, -1), (current_h, current_c), "small", deterministic=True)
                     action = env.action_spaces[f"agent_{agent_number}"][action_index]
 
                     # Take the action in the environment
@@ -139,11 +151,33 @@ while total_timesteps < TOTAL_TIMESTEPS:
 
         with torch.no_grad():
             print("Update")
-            obs_tensor = torch.tensor(obs.reshape(1,1,-1), dtype=torch.float32).to(DEVICE)
+            obs_tensor = torch.tensor(obs.reshape(1,1,-1), dtype=torch.float32).clone().to(DEVICE)
+            print(obs_tensor.shape)
             _, last_value, _ = learning_agent_nn.policy(obs_tensor, (current_h, current_c))
             last_value = last_value.item()       
-            learning_agent_nn.buffer.compute_gae_and_returns(last_value, done) 
-            learning_agent_nn.update()
+            learning_agent_nn.buffer.compute_gae_and_returns(last_value, done)
+            
+
+        print(f"Global grad enabled before calling update for {learning_agent}: {torch.is_grad_enabled()}") # Should be True
+        entropy = learning_agent_nn.update()
+        entropy_agents[learning_agent].append(entropy)
+
+        """
+        print("Update (NO_GRAD BLOCK TEMPORARILY DISABLED FOR DEBUG)")
+        obs_tensor = torch.tensor(obs.reshape(1,1,-1), dtype=torch.float32).clone().to(DEVICE)
+        # print(obs_tensor.shape)
+
+        h_learn, c_learn = hidden_states_map[learning_agent]
+        
+        # This policy call will now build a graph, which is not what we want for last_value
+        # but it's for debugging the grad state.
+        _logits_lv, last_value_raw_lv, _next_h_lv = learning_agent_nn.policy(obs_tensor, (h_learn, c_learn))
+        last_value = last_value_raw_lv.item() # .item() detaches anyway
+        
+        learning_agent_nn.buffer.compute_gae_and_returns(last_value, done)
+        
+        print(f"Global grad enabled before calling update for {learning_agent}: {torch.is_grad_enabled()}")
+        learning_agent_nn.update()"""
 
     print("Training finished.")
 
@@ -209,6 +243,17 @@ else:
             linewidth=2
         )
 
+    # both agents' smoothed plots
+    if num_episodes_defender >= N:
+        smoothed_defender = np.convolve(all_episode_rewards['defender'], np.ones(N)/N, mode='valid') + np.convolve(all_episode_rewards['attacker'], np.ones(N)/N, mode='valid') 
+        plt.plot(
+            np.arange(N - 1, num_episodes_defender), # Use full length of defender rewards for its smooth plot
+            smoothed_defender,
+            label=f'Both Smoothed (window {N})',
+            color="red",
+            linewidth=2
+        )
+
     plt.xlabel("Episode")
     plt.ylabel("Total Reward per Episode")
     plt.title("Episode Rewards for Attacker and Defender")
@@ -224,6 +269,7 @@ torch.save(agents["attacker"], "attacker_agent_final.pth")
 torch.save(agents["defender"], "defender_agent_final.pth")
 print(f"Total episodes trained: {episode_num}")
 print(f"Final episode reward (might be incomplete): {episode_reward}")
+print(entropy_agents)
 
 # Plotting
 # ... (your plotting code) ...

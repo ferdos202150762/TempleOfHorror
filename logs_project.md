@@ -9,4 +9,4 @@ I was able to create the env by now. I have to train the agents now.
 Added end game winner in case 2 Gold 1 Fire 4 Empty. 
 I added -1 as a symbol that a message hasn't been sent by each agent. 
 13May2025
-Decided to code a CFR for 4 card game 4 players and rounds. 
+Decided to code a CFR for 4 card game 4 players and rounds. I am preparing the env in simplivied game v3. 

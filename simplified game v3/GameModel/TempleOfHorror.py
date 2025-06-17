@@ -28,7 +28,7 @@
 
 import random
 import numpy as np
-
+import torch
 
 class TempleOfHorror():
     def __init__(self):
@@ -60,6 +60,7 @@ class TempleOfHorror():
 
         # Sample roles
         self.player_role = None
+        self.player_number = None
         self.enc_player_role = None
 
         # Action Space. Index position in observation vector
@@ -86,7 +87,7 @@ class TempleOfHorror():
         """
         for num_gold in range(0, 4):
             for num_fire in range(0, 2):
-                if num_gold + num_fire <= self.number_cards:
+                if num_gold + num_fire <= self._initial_cards:
                     self.message_space.append((num_fire, num_gold))
 
 
@@ -116,7 +117,7 @@ class TempleOfHorror():
             self.player_role[agent] = role
             aux.remove(role)
 
-
+        self.player_number = {self.player_role[agent_no]: int(agent_no.split("_")[1]) for agent_no in self.player_role.keys()}
 
         self.enc_player_role = self.encode_roles()
 
@@ -163,9 +164,9 @@ class TempleOfHorror():
         """
 
         if self.enc_player_role[agent] == winner:
-            return 1 
+            return 5
         else:
-            return -1 
+            return -5
 
             
 
@@ -195,9 +196,10 @@ class TempleOfHorror():
         final.append(hand.count(2))
         final.append(hand.count(3))
         final.append(int(player_number))
+        final.append(int(self.round))
 
  
-        return final
+        return torch.tensor(final)
             
     def referee(self):
         """
@@ -240,7 +242,7 @@ class TempleOfHorror():
 
         # Sample roles
         self.player_role = {agent:None for agent in self.agents}
-
+        self.player_number = None
 
         self.score = {"gold": 0, "fire": 0, "empty": 0}
         self.action_spaces = {agent:[] for agent in self.agents}
@@ -383,7 +385,6 @@ class TempleOfHorror():
         # Compute Reward For all agents
     
 
-
         if self.done:
             rewards = [self.reward(agent, winner) for agent in self.agents]
 
@@ -393,7 +394,16 @@ class TempleOfHorror():
             
             return self.done, state, rewards, card[:-2], winner
         else:
-            rewards = None
+            rewards = []
+            for agent in self.player_role.keys():
+                if "fire" in card[:-2]  and self.player_role[agent][:-2] == "defender": 
+                    rewards.append(1)
+                elif "gold" in card and self.player_role[agent][:-2] == "attacker":
+                    rewards.append(1)
+                elif "empty" in card:
+                    rewards.append(0)
+                else:
+                    rewards.append(-1)
 
             if self.turns == self.N:
                 self.turns = 0
