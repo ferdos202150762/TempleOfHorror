@@ -303,7 +303,7 @@ class TempleCFR():
 				next_acting_player = self.random_order[self.nodes_state[infoSet].env.provide_message]
 				hand = config.compute_hand_from_labels(self.nodes_state[infoSet].env.player_hands[f'agent_{learning_player}'])
 				nextInfoSet = self.nodes_state[infoSet].env.create_observation(next_acting_player, next_observation_spaces)
-				utility = self.external_cfr_message(history+f",A:{action})*NEW-TURN*HAND:{hand}*->(P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players, agent_key)				
+				utility = self.external_cfr_message(history+f",A:{action},C:{card})*NEW-TURN*HAND:{hand}*->(P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players, agent_key)				
 
 
 
