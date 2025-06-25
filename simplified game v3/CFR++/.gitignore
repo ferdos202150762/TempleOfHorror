@@ -3,5 +3,5 @@ objectsinfoset.dill
 __pycache__
 ../../.DS_Store
 .DS_Store
-
+../../.DS_Store
 dict_infoset.json
