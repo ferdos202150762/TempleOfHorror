@@ -78,6 +78,7 @@ class TempleOfHorror():
         self._initial_cards = 4
         self.number_cards = None
         self.turns = 0
+        self.agent_key = None
 
 
     def init_message_space(self):
@@ -87,7 +88,7 @@ class TempleOfHorror():
         """
         for num_gold in range(0, 4):
             for num_fire in range(0, 2):
-                if num_gold + num_fire <= self._initial_cards:
+                if num_gold + num_fire <= self.number_cards:
                     self.message_space.append((num_fire, num_gold))
 
 
@@ -208,14 +209,14 @@ class TempleOfHorror():
 
         if self.score["gold"] == 4:
 
-            print("*******************")
-            print("** ATTACKERS WIN **")
-            print("*******************")
+            #print("*******************")
+            #print("** ATTACKERS WIN **")
+            #print("*******************")
             return True, 0
         elif  self.score["fire"] == 2:
-            print("*******************")
-            print("** DEFENDERS WIN **")
-            print("*******************")
+            #print("*******************")
+            #print("** DEFENDERS WIN **")
+            #print("*******************")
             return True, 1
         else:
             return False, None
@@ -406,6 +407,7 @@ class TempleOfHorror():
                     rewards.append(-1)
 
             if self.turns == self.N:
+
                 self.turns = 0
                 self.reset_turn()
 
