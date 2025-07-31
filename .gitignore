@@ -1,0 +1,8 @@
+simplified game v3/CFR++/cfr_strategies17062025.jso
+simplified game v3/CFR++/dict_infoset.json
+simplified game v3/MARLv1/
+.DS_Store
+env-experiments/v2_simplified_game_3p_9cards/CFR/models/*
+**/models/**/*.json
+**/checkpoints/**/*.pkl
+experiments/v2_simplified_game/CFR/models/cfr_strategies_10_1000.json
