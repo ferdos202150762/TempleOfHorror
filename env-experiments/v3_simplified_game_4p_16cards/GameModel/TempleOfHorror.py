@@ -29,6 +29,7 @@
 import random
 import numpy as np
 import torch
+import copy
 
 class TempleOfHorror():
     def __init__(self):
@@ -56,6 +57,7 @@ class TempleOfHorror():
         
         # Sample from deck       
         self.player_hands = None
+        self.static_player_hands = None
         self.enc_player_hands = None
 
         # Sample roles
@@ -253,6 +255,7 @@ class TempleOfHorror():
         self.sample_roles()
 
         self.sample_deck()
+        self.static_player_hands = copy.deepcopy(self.player_hands)
 
         self.init_action_space()
 

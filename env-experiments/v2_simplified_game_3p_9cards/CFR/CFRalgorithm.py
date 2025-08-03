@@ -114,7 +114,7 @@ class TempleCFR():
 
 			average_utilities[t-1][:] = cumulative_utility.copy()/t
 
-			if t % 10000 == 0:
+			if t % 5000 == 0:
 				self.save_checkpoint()
 
 

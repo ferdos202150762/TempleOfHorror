@@ -353,7 +353,7 @@ class TempleCFR():
 		#print('THIS IS ITERATION', t)
 
 
-		message_action_space = config.message_space
+		message_action_space = env.message_space
 
 
 		# Build infoset by state
