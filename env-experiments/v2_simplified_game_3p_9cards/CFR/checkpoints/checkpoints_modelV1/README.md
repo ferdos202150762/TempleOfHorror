@@ -1,0 +1,1 @@
+Models where every agent can lie or say the truth. If they lie and win there is apremium for lying, if they lie and lose there is a cost. 
