@@ -62,7 +62,7 @@ sys.path.append("..")
 from GameModel.TempleOfHorror import TempleOfHorror
 
 
-class TempleCFR():
+class OutcomeSamplingCFR():
 	def __init__(self, iterations, nodes):
 		self.iterations = iterations
 		self.nodes_state = nodes
@@ -86,7 +86,7 @@ class TempleCFR():
 		with open(checkpoint_path, 'rb') as f:
 			return pickle.load(f)		
 
-	def cfr_iterations_external(self):
+	def cfr_iterations_outcome(self, attackers_are_truthful=True):
 		average_utilities = np.zeros((self.iterations, self.env.N))
 		cumulative_utility = np.zeros(self.env.N)
 		start_iteration = self.iteration + 1
@@ -106,7 +106,7 @@ class TempleCFR():
 				infoSet = self.env.create_observation(learning_player, observation)
 				hand = config.compute_hand_from_labels(self.env_aux.player_hands[f'agent_{learning_player}'])
 
-				cumulative_utility[learning_player] += self.external_cfr_message(f"P:{learning_player},R:{env_instance.player_role[f'agent_{learning_player}'][:-2]},C:{hand}GameInits->(P:{self.acting_player}", str(infoSet),  learning_player,  self.acting_player, t, probability_players, env_instance)
+				cumulative_utility[learning_player] += self.outcome_cfr_message(f"P:{learning_player},R:{env_instance.player_role[f'agent_{learning_player}'][:-2]},C:{hand}GameInits->(P:{self.acting_player}", str(infoSet),  learning_player,  self.acting_player, t, probability_players, env_instance, attackers_are_truthful)
 				#print(player, utility[player])
 			average_utilities[t-1][:] = cumulative_utility.copy()/t
 
@@ -122,7 +122,7 @@ class TempleCFR():
 				
 	  
 
-	def external_cfr(self, history, infoSet, learning_player, acting_player, t, probability_players, env):
+	def outcome_cfr(self, history, infoSet, learning_player, acting_player, t, probability_players, env, attackers_are_truthful):
 
 		"""
 		Perform the CFR algorithm for a given information set.
@@ -147,10 +147,7 @@ class TempleCFR():
 			self.nodes_state[infoSet].number += 1	
 
 
-		if history not in self.nodes:
-			self.nodes[history] = NodeInfoSet(len(env.action_spaces[f"agent_{acting_player}"]), history)
-		else:
-			self.nodes[history].number += 1	
+
 
 
 		done, winner = env.referee()
@@ -231,39 +228,49 @@ class TempleCFR():
 				
 		## Learning procedure
 		if acting_player == learning_player:
+			if history not in self.nodes:
+				self.nodes[history] = NodeInfoSet(len(env.action_spaces[f"agent_{acting_player}"]), history)
+			else:
+				self.nodes[history].number += 1	
+				
 			action_space_length = len(env.action_spaces[f"agent_{acting_player}"])
 			utility = np.zeros(action_space_length) 
 			node_utility = 0
 			strategy = self.nodes[history].get_strategy()
 
-			for index, action in enumerate(env.action_spaces[f"agent_{acting_player}"]):
-				# Reset to original infoset env to run analysis again
-				next_env = copy.deepcopy(env)
-				
-				# Step ahead
-				next_acting_player = action
-				done, next_observation_spaces, _, card, _ = next_env.step(action)
+			# Outcome sampling	
+			# sample action and index
+			action = np.random.choice(env.action_spaces[f"agent_{acting_player}"])
+			# get action index
+			index = env.action_spaces[f"agent_{acting_player}"].index(action)
+
+			# Reset to original infoset env to run analysis again
+			next_env = copy.deepcopy(env)
+			
+			# Step ahead
+			next_acting_player = action
+			done, next_observation_spaces, _, card, _ = next_env.step(action)
+			nextInfoSet = next_env.create_observation(next_acting_player, next_observation_spaces)
+			card = card.replace("_","")
+
+			probability_players[f"agent_{acting_player}"] *= strategy[index]
+
+
+			# new message stage
+			if next_env.message_provided:
+
+				utility[index] = self.outcome_cfr(history+f",A:{action},C:{card})->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players, next_env, attackers_are_truthful)
+			else:
+				agent_key = next_acting_player
+				next_acting_player = 0
+				hand = config.compute_hand_from_labels(next_env.player_hands[f'agent_{learning_player}'])
 				nextInfoSet = next_env.create_observation(next_acting_player, next_observation_spaces)
-				card = card.replace("_","")
-
-				probability_players[f"agent_{acting_player}"] *= strategy[index]
-
-
-				# new message stage
-				if next_env.message_provided:
-
-					utility[index] = self.external_cfr(history+f",A:{action},C:{card})->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players, next_env)
-				else:
-					agent_key = next_acting_player
-					next_acting_player = 0
-					hand = config.compute_hand_from_labels(next_env.player_hands[f'agent_{learning_player}'])
-					nextInfoSet = next_env.create_observation(next_acting_player, next_observation_spaces)
-					utility[index] = self.external_cfr_message(history+f",A:{action},C:{card})*NEW-TURN*HAND:{hand}*->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players, agent_key, next_env)
-				
+				utility[index] = self.outcome_cfr_message(history+f",A:{action},C:{card})*NEW-TURN*HAND:{hand}*->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players, agent_key, next_env, attackers_are_truthful)
+			
 
 
 				
-				node_utility += strategy[index] * utility[index]
+			node_utility = utility[index]
 
 
 
@@ -328,14 +335,14 @@ class TempleCFR():
 			# recursion
 			if next_env.message_provided:
 
-				utility = self.external_cfr(history+f",A:{action},C:{card})->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players, next_env)
+				utility = self.outcome_cfr(history+f",A:{action},C:{card})->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players, next_env, attackers_are_truthful)
 			else:
 				## Another message needs to be provided
 				agent_key = next_acting_player
 				next_acting_player = 0
 				hand = config.compute_hand_from_labels(next_env.player_hands[f'agent_{learning_player}'])
 				nextInfoSet = next_env.create_observation(next_acting_player, next_observation_spaces)
-				utility = self.external_cfr_message(history+f",A:{action},C:{card})*NEW-TURN*HAND:{hand}*->(P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players, agent_key, next_env)				
+				utility = self.outcome_cfr_message(history+f",A:{action},C:{card})*NEW-TURN*HAND:{hand}*->(P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players, agent_key, next_env, attackers_are_truthful)				
 
 
 
@@ -346,14 +353,23 @@ class TempleCFR():
 		
 
 
-	def external_cfr_message(self,history, infoSet, learning_player, acting_player, t, probability_players, agent_key, env):
+	def outcome_cfr_message(self,history, infoSet, learning_player, acting_player, t, probability_players, agent_key, env, attackers_are_truthful):
 		"""
 			Decisions for message space
 		"""
 		#print('THIS IS ITERATION', t)
 
 
-		message_action_space = env.message_space
+		# If Attackers are truthful
+		if "attacker" in env.player_role[f'agent_{acting_player}'] and attackers_are_truthful:
+			# number of fire and gold in acting player hand
+			number_fire = env.enc_player_hands[f'agent_{acting_player}'].count(2)
+			number_gold = env.enc_player_hands[f'agent_{acting_player}'].count(3)
+			# number of fire and gold in learning player hand
+			attacker_message_space = [(number_fire,number_gold)]
+			message_action_space = attacker_message_space
+		else:
+			message_action_space = env.message_space
 
 
 		# Build infoset by state
@@ -363,46 +379,52 @@ class TempleCFR():
 			self.nodes_state[infoSet].number += 1	
 
 
-		# Build infoset by history
-		if history not in self.nodes:
-			self.nodes[history] = NodeInfoSet(len(message_action_space), history)
-		else:
-			self.nodes[history].number += 1	
+
 
 
 
 		if acting_player == learning_player:
+			# Build infoset by history
+			if history not in self.nodes:
+				self.nodes[history] = NodeInfoSet(len(message_action_space), history)
+			else:
+				self.nodes[history].number += 1	
 
 			action_space_length = len(message_action_space)
 			utility = np.zeros(action_space_length) 
 			node_utility = 0
 			strategy = self.nodes[history].get_strategy()
 
-			for index, action in enumerate(message_action_space):
-				# Reset to original infoset env to run analysis again
-				next_env = copy.deepcopy(env)
-				
-				# Step ahead
-				next_observation_spaces = next_env.step_message(action)
+			# Outcome sampling	
+			# sample action and index
+			action = np.random.choice(message_action_space, p = strategy)
+			# get action index
+			index = message_action_space.index(action)
+
+			# Reset to original infoset env to run analysis again
+			next_env = copy.deepcopy(env)
+			
+			# Step ahead
+			next_observation_spaces = next_env.step_message(action)
 
 
-				probability_players[f"agent_{learning_player}"] *= strategy[index]
+			probability_players[f"agent_{learning_player}"] *= strategy[index]
 
 
 
-				if next_env.message_provided:
-					# If all messages were provided
-					next_acting_player = agent_key
-					nextInfoSet = next_env.create_observation(next_acting_player, next_observation_spaces)
+			if next_env.message_provided:
+				# If all messages were provided
+				next_acting_player = agent_key
+				nextInfoSet = next_env.create_observation(next_acting_player, next_observation_spaces)
 
-					utility[index] = self.external_cfr(history+f",A:{action})->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players, next_env)
-				else:
-					# Another message needs to be provided
-					next_acting_player = self.random_order[next_env.provide_message]
-					nextInfoSet = next_env.create_observation(next_acting_player, next_observation_spaces)
-					utility[index] = self.external_cfr_message(history+f",A:{action})->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players, agent_key, next_env)
-				
-				node_utility += strategy[index] * utility[index]
+				utility[index] = self.outcome_cfr(history+f",A:{action})->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players, next_env, attackers_are_truthful)
+			else:
+				# Another message needs to be provided
+				next_acting_player = self.random_order[next_env.provide_message]
+				nextInfoSet = next_env.create_observation(next_acting_player, next_observation_spaces)
+				utility[index] = self.outcome_cfr_message(history+f",A:{action})->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players, agent_key, next_env, attackers_are_truthful)
+			
+			node_utility =  utility[index]
 
 
 
@@ -468,12 +490,12 @@ class TempleCFR():
 				## If all messages were provided
 				next_acting_player = agent_key 
 				nextInfoSet = next_env.create_observation(next_acting_player, next_observation_spaces)
-				utility = self.external_cfr(history+f",A:{message_action_space[action]})->(P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players, next_env)
+				utility = self.outcome_cfr(history+f",A:{message_action_space[action]})->(P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players, next_env, attackers_are_truthful)
 			else:
 				## Another message needs to be provided
 				next_acting_player = self.random_order[next_env.provide_message]
 				nextInfoSet = next_env.create_observation(next_acting_player, next_observation_spaces)
-				utility = self.external_cfr_message(history+f",A:{message_action_space[action]})->(P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players, agent_key, next_env)				
+				utility = self.outcome_cfr_message(history+f",A:{message_action_space[action]})->(P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players, agent_key, next_env, attackers_are_truthful)				
 
 
 

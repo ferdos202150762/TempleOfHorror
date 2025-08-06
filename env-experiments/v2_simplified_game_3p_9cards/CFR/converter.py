@@ -27,7 +27,7 @@ def convert_to_json():
     # Create a filename with date and hour
     now = datetime.datetime.now()
     checkpoint_number = checkpoint_file.split('/')[-1].split('_')[-1].split('.')[0]
-    filename = f"models/modelv1/cfr_strategies_{now.strftime('%Y-%m-%d_%H-%M-%S')}-{checkpoint_number}.json"
+    filename = f"models/modelv2-defenders-could-lie/cfr_strategies_{now.strftime('%Y-%m-%d_%H-%M-%S')}-{checkpoint_number}.json"
 
     # Write the JSON file
     with open(filename, 'w') as f:

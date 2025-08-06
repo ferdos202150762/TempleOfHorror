@@ -1,7 +1,15 @@
-from CFRalgorithm import TempleCFR
+from CFRalgorithm import OutcomeCFR
 import os
+import argparse
 
-CHECKPOINT_DIR = 'checkpoints'
+# Define the command line arguments
+parser = argparse.ArgumentParser(description='CFR Training Script')
+parser.add_argument('--iterations', type=int, default=1_000_000, help='Number of CFR iterations to run')
+parser.add_argument('--checkpoint_dir', type=str, default='checkpoints', help='Directory to save checkpoints')
+parser.add_argument('--truthful_attackers', type=bool,default = True, action='store_true', help='Whether attackers are truthful')
+args = parser.parse_args()  
+
+CHECKPOINT_DIR = args.checkpoint_dir
 LATEST_CHECKPOINT = 'latest_checkpoint.txt'
 
 def get_latest_checkpoint():
@@ -19,13 +27,13 @@ if __name__ == "__main__":
 
     if latest_checkpoint_path and os.path.exists(latest_checkpoint_path):
         print(f"Resuming training from {latest_checkpoint_path}")
-        k = TempleCFR.load_checkpoint(latest_checkpoint_path)
+        k = OutcomeCFR.load_checkpoint(latest_checkpoint_path)
     else:
         print("Starting new training session")
-        k = TempleCFR(1_000_000, {}, {})
+        k = OutcomeCFR(args.iterations, {}, {})
 
     try:
-        utilities = k.cfr_iterations_external()
+        utilities = k.cfr_iterations_outcome(attackers_are_truthful=args.truthful_attackers)
     except KeyboardInterrupt:
         print("\nTraining interrupted. Saving checkpoint...")
         k.save_checkpoint()

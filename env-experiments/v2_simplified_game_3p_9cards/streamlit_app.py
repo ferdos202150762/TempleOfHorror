@@ -11,7 +11,7 @@ sys.path.append('GameModel')
 from TempleOfHorror import TempleOfHorror
 
 # --- Configuration ---
-MODELS_DIR = 'CFR/models/'
+MODELS_DIR = 'CFR/models/modelv2-defenders-could-lie/'
 
 # --- Helper Functions ---
 
@@ -45,6 +45,13 @@ def get_ai_choice(env, player_id, history, strategies):
         return np.random.choice(action_space)
     else: # Message phase
         message_space = env.message_space
+        role = env.player_role[f'agent_{player_id}']
+        if role.startswith('attacker'):
+            hand = env.player_hands[f'agent_{player_id}']
+            num_fire = sum(1 for card in hand if card.startswith('fire'))
+            num_gold = sum(1 for card in hand if card.startswith('gold'))
+            message_space = [(num_fire, num_gold)]
+
         if strategy and len(strategy) == len(message_space):
             choice_idx = np.random.choice(len(strategy), p=strategy)
             return message_space[choice_idx]
@@ -189,7 +196,7 @@ def main():
 
         if current_player == st.session_state.human_player_id:
             st.write("Declare the number of fire 🔥 and gold 💰 cards you claim to have.")
-            msg_options = {f"{msg[0]} Fire 🔥, {msg[1]} Gold 💰": tuple(msg) for msg in game.message_space}
+            msg_options = {f"{msg[0]} Fire{' ' + '🔥' * msg[0] if msg[0] > 0 else ''}, {msg[1]} Gold{' ' + '💰' * msg[1] if msg[1] > 0 else ''}": tuple(msg) for msg in game.message_space}
             chosen_msg_str = st.radio("Choose your message:", options=msg_options.keys(), horizontal=True)
 
             if st.button("Send Message", type="primary"):

@@ -1,1 +1,1 @@
-checkpoints/cfr_checkpoint_20000.pkl
+checkpoints/cfr_checkpoint_347034.pkl

@@ -89,7 +89,7 @@ class TempleCFR():
 		with open(checkpoint_path, 'rb') as f:
 			return pickle.load(f)
 
-	def cfr_iterations_external(self, attackers_are_truthful=True):
+	def cfr_iterations_external(self, attackers_are_truthful = True):
 		average_utilities = np.zeros((self.iterations, self.env.N))
 		cumulative_utility = np.zeros(self.env.N)
 		start_iteration = self.iteration + 1
@@ -109,7 +109,7 @@ class TempleCFR():
 				infoSet = self.env.create_observation(learning_player, observation)
 				hand = config.compute_hand_from_labels(env_instance.static_player_hands[f'agent_{learning_player}'])
 
-				cumulative_utility[learning_player] += self.external_cfr_message(f"P:{learning_player},R:{env_instance.player_role[f'agent_{learning_player}'][:-2]},C:{hand}GameInits->(P:{self.acting_player}", str(infoSet),  learning_player,  self.acting_player, t, probability_players, env_instance, attackers_are_truthful=attackers_are_truthful)
+				cumulative_utility[learning_player] += self.external_cfr_message(f"P:{learning_player},R:{env_instance.player_role[f'agent_{learning_player}'][:-2]},C:{hand}GameInits->(P:{self.acting_player}", str(infoSet),  learning_player,  self.acting_player, t, probability_players, env_instance, attackers_are_truthful)
 				#print(player, utility[player])                       
 
 			average_utilities[t-1][:] = cumulative_utility.copy()/t
@@ -323,7 +323,7 @@ class TempleCFR():
 		
 
 
-	def external_cfr_message(self,history, infoSet, learning_player, acting_player, t, probability_players, env, attackers_are_truthful=True):
+	def external_cfr_message(self,history, infoSet, learning_player, acting_player, t, probability_players, env, attackers_are_truthful):
 		"""
 			Decisions for message space
 		"""
@@ -452,7 +452,7 @@ class TempleCFR():
 				## Another message needs to be provided
 				next_acting_player = self.random_order[next_env.provide_message]
 				nextInfoSet = next_env.create_observation(next_acting_player, next_observation_spaces)
-				utility = self.external_cfr_message(history+f",A:{message_action_space[action]})->(P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players, next_env, attackers_are_truthful=attackers_are_truthful)				
+				utility = self.external_cfr_message(history+f",A:{message_action_space[action]})->(P:{next_acting_player}",str(nextInfoSet), learning_player, next_acting_player,t, probability_players, next_env, attackers_are_truthful)				
 
 
 
