@@ -6,7 +6,7 @@ import argparse
 parser = argparse.ArgumentParser(description='CFR Training Script')
 parser.add_argument('--iterations', type=int, default=1_000_000, help='Number of CFR iterations to run')
 parser.add_argument('--checkpoint_dir', type=str, default='checkpoints', help='Directory to save checkpoints')
-parser.add_argument('--truthful_attackers', type=bool,default = True, action='store_true', help='Whether attackers are truthful')
+parser.add_argument('--truthful_attackers', type=bool, default = False, help='Whether attackers are truthful')
 args = parser.parse_args()  
 
 CHECKPOINT_DIR = args.checkpoint_dir
@@ -34,9 +34,10 @@ if __name__ == "__main__":
     else:
         print("Starting new training session")
         k = TempleCFR(args.iterations, {}, {})
-
+        print(args)
+    print("Attackers are truthful:", args.truthful_attackers)
     try:
-        utilities = k.cfr_iterations_external(attackers_are_truthful = args.truthful_attackers)
+        utilities = k.cfr_iterations_external(args.truthful_attackers)
     except KeyboardInterrupt:
         print("\nTraining interrupted. Saving checkpoint...")
         k.save_checkpoint()

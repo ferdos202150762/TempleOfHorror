@@ -86,7 +86,7 @@ class OutcomeSamplingCFR():
 		with open(checkpoint_path, 'rb') as f:
 			return pickle.load(f)		
 
-	def cfr_iterations_outcome(self, attackers_are_truthful=True):
+	def cfr_iterations_outcome(self, attackers_are_truthful):
 		average_utilities = np.zeros((self.iterations, self.env.N))
 		cumulative_utility = np.zeros(self.env.N)
 		start_iteration = self.iteration + 1

@@ -89,7 +89,7 @@ class TempleCFR():
 		with open(checkpoint_path, 'rb') as f:
 			return pickle.load(f)
 
-	def cfr_iterations_external(self, attackers_are_truthful = True):
+	def cfr_iterations_external(self, attackers_are_truthful):
 		average_utilities = np.zeros((self.iterations, self.env.N))
 		cumulative_utility = np.zeros(self.env.N)
 		start_iteration = self.iteration + 1
@@ -340,6 +340,7 @@ class TempleCFR():
 		else:
 			message_action_space = env.message_space
 
+
 		# Build infoset by state
 		if infoSet not in self.nodes_state:
 			self.nodes_state[infoSet] = NodeState(len(message_action_space))
@@ -382,7 +383,7 @@ class TempleCFR():
 					next_acting_player = self.random_order[next_env.provide_message]
 
 					nextInfoSet = next_env.create_observation(next_acting_player, next_observation_spaces)
-					utility[index] = self.external_cfr_message(history+f",A:{action})->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players, next_env, attackers_are_truthful=attackers_are_truthful)
+					utility[index] = self.external_cfr_message(history+f",A:{action})->(P:{next_acting_player}", str(nextInfoSet), learning_player, next_acting_player,t, probability_players, next_env, attackers_are_truthful)
 				
 				node_utility += strategy[index] * utility[index]
 
@@ -425,12 +426,14 @@ class TempleCFR():
 			if acting_history not in self.nodes:
 				self.nodes[acting_history] = NodeInfoSet(action_space_length, acting_history)
 			else:
+
 				self.nodes[acting_history].number += 1	
-	
+
 			strategy = self.nodes[acting_history].get_strategy()
 			utility = 0
 
 			# Step ahead
+
 
 			action = np.random.choice(range(len(message_action_space)), p=strategy)
 			action_probability = strategy[action]
